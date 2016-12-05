@@ -1,0 +1,10 @@
+planned features not yet implemented
+------------------------------------
+
+* interactive mouse support
+* texture channels for both 2D and cube textures
+* load in shader and configure texture channels from
+  command line, use default shader if none specified
+* subsampling and supersampling
+* ability to run on a specified x display/screen
+* fullscreen mode
