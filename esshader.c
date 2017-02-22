@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <X11/Xlib.h>
@@ -66,6 +67,14 @@ static void die(const char *format, ...){
     exit(EXIT_FAILURE);
 }
 
+static void info(const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    vfprintf(stdout, format, args);
+    va_end(args);
+}
+
 static double timespec_diff(const struct timespec *start, const struct timespec *stop){
     struct timespec d;
     if ((stop->tv_nsec - start->tv_nsec) < 0){
@@ -113,6 +122,7 @@ static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources
     return shader;
 }
 
+
 static void resize_viewport(GLsizei w, GLsizei h){
     if (viewport_width != w || viewport_height != h) {
         glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
@@ -122,7 +132,7 @@ static void resize_viewport(GLsizei w, GLsizei h){
     }
 }
 
-static void startup(void)
+static void startup(int width, int height, bool fullscreen)
 {
     static const EGLint cv[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
@@ -175,9 +185,24 @@ static void startup(void)
         KeyPressMask | PointerMotionMask;
     swa.override_redirect = False;
 
+    int window_width = width;
+    int window_height = height;
+    
+    if(fullscreen) {
+        window_width = DisplayWidth(x_display, screen);
+        window_height = DisplayHeight(x_display, screen);
+        //Setting swa.override_redirect to True would result a "real" fullscreen window
+        //BUT: On multiscreen systems it would stretch over all displays 
+        //AND: Keyboard commands aren't processed anymore
+        //MAYBE: Switch to glfw or something similar to create the window. As a neat side effect the app would run on Windows too.
+        //swa.override_redirect = True;
+    }
+
+    info("Setting window size to (%d,%d).\n", window_width, window_height);
+
     x_window = XCreateWindow(x_display, x_root, 0, 0,
-            DisplayWidth(x_display, screen),
-            DisplayHeight(x_display, screen),
+            window_width,
+            window_height,
             0, vi->depth, InputOutput, vi->visual,
             CWBackPixel | CWColormap | CWEventMask |
             CWOverrideRedirect, &swa);
@@ -307,10 +332,61 @@ static void render(float abstime){
     eglSwapBuffers(egl_display, egl_surface);
 }
 
-int main(int argc, char **argv){
-    struct timespec start, cur;
+//Version 
+static const char* version = "0.1";
 
-    startup();
+
+int main(int argc, char **argv){
+    info("ESShader Version: %s\n", version);
+    info("Press [ESC] or [q] to exit.\n");
+    info("Run with -h option for more information.\n\n");
+
+    struct timespec start, cur;
+    bool fullscreen = false;
+    int window_width = 640;
+    int window_height = 360;
+
+    int temp_width = 0;
+    int temp_height = 0;
+
+    //Parse command line options
+    int option = -1;
+    while((option = getopt (argc, argv, "fhx:y:s:")) != -1) {
+    switch(option) {
+        case 'f':
+            fullscreen = true;
+            break;
+        case 'x':
+            temp_width = atoi(optarg);
+            if(temp_width > 0) {
+                window_width = temp_width;
+            }
+            break;
+        case 'y':
+            temp_height = atoi(optarg);
+            if(temp_height > 0) {
+                window_height = temp_height;
+            }
+            break;
+/*        case 's':
+            info("Loading shader program: %s\n", optarg);
+            die("Not supported yet!\n");
+            break;*/
+        case 'h':
+            info(   "Usage: esshader -[fhxys]\n"
+                    "Example: esshader -x 1280 -y 720\n\n"
+                    "Options:\n"
+                    " -f \t\truns the program in (fake) fullscreen mode.\n"
+                    " -h \t\tshows this help.\n"
+                    " -x [value] \tsets the window width to [value].\n"
+                    " -y [value] \tsets the window height to [value].\n"
+                    //" -s [path] \t path to shader program [Not supported yet.]\n"
+                    );
+            return 0;
+        }
+    }
+
+    startup(window_width, window_height, fullscreen);
     monotonic_time(&start);
 
     for (;;) {
