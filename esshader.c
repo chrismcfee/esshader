@@ -129,6 +129,7 @@ static void resize_viewport(GLsizei w, GLsizei h){
         glViewport(0, 0, w, h);
         viewport_width = w;
         viewport_height = h;
+        info("Setting window size to (%d,%d).\n", w, h);
     }
 }
 
@@ -197,8 +198,6 @@ static void startup(int width, int height, bool fullscreen)
         //MAYBE: Switch to glfw or something similar to create the window. As a neat side effect the app would run on Windows too.
         //swa.override_redirect = True;
     }
-
-    info("Setting window size to (%d,%d).\n", window_width, window_height);
 
     x_window = XCreateWindow(x_display, x_root, 0, 0,
             window_width,
@@ -332,22 +331,52 @@ static void render(float abstime){
     eglSwapBuffers(egl_display, egl_surface);
 }
 
-//Version 
-static const char* version = "0.1";
-
+//Reads a file into a string
+//Return string or NULL on failure
+static char* read_file_into_str(const char *filename) {
+    long length = 0;
+    char *result = NULL;
+    FILE *file = fopen(filename, "r");
+    if(file) {
+        int status = fseek(file, 0, SEEK_END);
+        if(status != 0) {
+            fclose(file);
+            return NULL;
+        }
+        length = ftell(file);
+        status = fseek(file, 0, SEEK_SET);
+        if(status != 0) {
+            fclose(file);
+            return NULL;
+        }
+        result = malloc((length+1) * sizeof(char));
+        if(result) {
+            size_t actual_length = fread(result, sizeof(char), length , file);
+            result[actual_length++] = '\0';
+        } 
+        fclose(file);
+        return result;
+    }
+    return NULL;
+}
 
 int main(int argc, char **argv){
-    info("ESShader Version: %s\n", version);
+    info("ESShader -  Version: %s\n", VERSION);
     info("Press [ESC] or [q] to exit.\n");
     info("Run with -h option for more information.\n\n");
 
     struct timespec start, cur;
+    
+    //Default options
     bool fullscreen = false;
     int window_width = 640;
     int window_height = 360;
 
     int temp_width = 0;
     int temp_height = 0;
+
+    //shader program
+    char *program_source = NULL;
 
     //Parse command line options
     int option = -1;
@@ -368,10 +397,15 @@ int main(int argc, char **argv){
                 window_height = temp_height;
             }
             break;
-/*        case 's':
+        case 's':
             info("Loading shader program: %s\n", optarg);
-            die("Not supported yet!\n");
-            break;*/
+            program_source = read_file_into_str(optarg);
+            if(program_source == NULL) {
+                die("Could not read shader program %s\n", optarg);
+            }
+            //info("File content: %s\n\n", program_source);
+            default_fragment_shader = program_source;
+            break;
         case 'h':
             info(   "Usage: esshader -[fhxys]\n"
                     "Example: esshader -x 1280 -y 720\n\n"
@@ -380,7 +414,7 @@ int main(int argc, char **argv){
                     " -h \t\tshows this help.\n"
                     " -x [value] \tsets the window width to [value].\n"
                     " -y [value] \tsets the window height to [value].\n"
-                    //" -s [path] \t path to shader program [Not supported yet.]\n"
+                    " -s [path] \t path to shader program [Not supported yet.]\n"
                     );
             return 0;
         }
