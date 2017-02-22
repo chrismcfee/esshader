@@ -432,6 +432,10 @@ int main(int argc, char **argv){
     }
 
     shutdown();
+    if(program_source != NULL) {
+        free(program_source);
+        program_source = NULL;
+    }
     return 0;
 }
 
