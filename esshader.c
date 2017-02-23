@@ -56,6 +56,11 @@ static GLint uniform_mouse;
 static GLint uniform_res;
 static GLint uniform_srate;
 
+//Frames per second
+static int frames = 0; //init to zero
+static float starttime = 0.0f;
+static char window_title[50]; //Window title with version number
+
 static void die(const char *format, ...){
     va_list args;
 
@@ -182,7 +187,8 @@ static void startup(void)
             CWBackPixel | CWColormap | CWEventMask |
             CWOverrideRedirect, &swa);
 
-    XStoreName(x_display, x_window, "esshader");
+    sprintf(window_title, title_string, VERSION);
+    XStoreName(x_display, x_window, window_title);
     XMapWindow(x_display, x_window);
     XFlush(x_display);
 
@@ -305,6 +311,16 @@ static void render(float abstime){
     glVertexAttribPointer(attrib_position, 2, GL_FLOAT, GL_FALSE, 0, vertices);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     eglSwapBuffers(egl_display, egl_surface);
+    
+    
+    if(abstime - starttime > 0.25f) {
+        //Use info() when features/flags branch is merged
+        fprintf(stdout, "\rFrames per second: %3.1f, Duration %.1f", (float)frames/(abstime - starttime), abstime);
+        fflush(stdout);
+        starttime = abstime;
+        frames = 0;
+    }
+    frames++;
 }
 
 int main(int argc, char **argv){
@@ -320,6 +336,8 @@ int main(int argc, char **argv){
         render((float)timespec_diff(&start, &cur));
         monotonic_time(&cur);
     }
+    fprintf(stdout, "\n");
+    fflush(stdout);
 
     shutdown();
     return 0;
