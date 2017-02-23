@@ -4,6 +4,7 @@
  * Configuration attributes for EGL context. See eglChooseConfig.
 */
 
+char title_string[] = "ESShader - Version %s";
 
 static const EGLint egl_config[] = {
     EGL_RED_SIZE, 8,
