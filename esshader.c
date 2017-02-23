@@ -362,8 +362,6 @@ static char* read_file_into_str(const char *filename) {
 
 int main(int argc, char **argv){
     info("ESShader -  Version: %s\n", VERSION);
-    info("Press [ESC] or [q] to exit.\n");
-    info("Run with --help flag for more information.\n\n");
 
     struct timespec start, cur;
     
@@ -381,7 +379,7 @@ int main(int argc, char **argv){
     //Parse command line selected_options
     int selected_option = -1;
     int selected_index = 0;
-    while((selected_option = getopt_long (argc, argv, "?fw:h:s:", long_options, &selected_index)) != -1) {
+    while((selected_option = getopt_long (argc, argv, options_string, long_options, &selected_index)) != -1) {
     switch(selected_option) {
         case 'f':
             fullscreen = true;
@@ -407,7 +405,7 @@ int main(int argc, char **argv){
             default_fragment_shader = program_source;
             break;
         case '?':
-            info(   "Usage: esshader [OPTIONS]\n"
+            info(   "\nUsage: esshader [OPTIONS]\n"
                     "Example: esshader --width 1280 --height 720\n\n"
                     "Options:\n"
                     " -f, --fullscreen \truns the program in (fake) fullscreen mode.\n"
@@ -420,6 +418,8 @@ int main(int argc, char **argv){
         }
     }
 
+    info("Press [ESC] or [q] to exit.\n");
+    info("Run with --help flag for more information.\n\n");
     startup(window_width, window_height, fullscreen);
     monotonic_time(&start);
 
