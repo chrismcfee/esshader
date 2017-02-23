@@ -14,7 +14,7 @@ LIBS = -L/usr/lib -lc -lm -L${X11LIB} -lX11 -lEGL -lGLESv2
 
 # toolchain flags
 CPPFLAGS = -DVERSION=\"${VERSION}\" -D_POSIX_C_SOURCE=200112L
-CFLAGS = -std=c99 -pedantic -Wall -Os ${INCS} ${CPPFLAGS}
+CFLAGS = -std=c99 -pedantic -Wall -O3 ${INCS} ${CPPFLAGS}
 LDFLAGS = -s ${LIBS}
 
 # compiler and linker

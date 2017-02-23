@@ -363,11 +363,11 @@ static char* read_file_into_str(const char *filename) {
 int main(int argc, char **argv){
     info("ESShader -  Version: %s\n", VERSION);
     info("Press [ESC] or [q] to exit.\n");
-    info("Run with -h option for more information.\n\n");
+    info("Run with --help flag for more information.\n\n");
 
     struct timespec start, cur;
     
-    //Default options
+    //Default selected_options
     bool fullscreen = false;
     int window_width = 640;
     int window_height = 360;
@@ -378,20 +378,21 @@ int main(int argc, char **argv){
     //shader program
     char *program_source = NULL;
 
-    //Parse command line options
-    int option = -1;
-    while((option = getopt (argc, argv, "fhx:y:s:")) != -1) {
-    switch(option) {
+    //Parse command line selected_options
+    int selected_option = -1;
+    int selected_index = 0;
+    while((selected_option = getopt_long (argc, argv, "?fw:h:s:", long_options, &selected_index)) != -1) {
+    switch(selected_option) {
         case 'f':
             fullscreen = true;
             break;
-        case 'x':
+        case 'w':
             temp_width = atoi(optarg);
             if(temp_width > 0) {
                 window_width = temp_width;
             }
             break;
-        case 'y':
+        case 'h':
             temp_height = atoi(optarg);
             if(temp_height > 0) {
                 window_height = temp_height;
@@ -403,18 +404,17 @@ int main(int argc, char **argv){
             if(program_source == NULL) {
                 die("Could not read shader program %s\n", optarg);
             }
-            //info("File content: %s\n\n", program_source);
             default_fragment_shader = program_source;
             break;
-        case 'h':
-            info(   "Usage: esshader -[fhxys]\n"
-                    "Example: esshader -x 1280 -y 720\n\n"
+        case '?':
+            info(   "Usage: esshader [OPTIONS]\n"
+                    "Example: esshader --width 1280 --height 720\n\n"
                     "Options:\n"
-                    " -f \t\truns the program in (fake) fullscreen mode.\n"
-                    " -h \t\tshows this help.\n"
-                    " -x [value] \tsets the window width to [value].\n"
-                    " -y [value] \tsets the window height to [value].\n"
-                    " -s [path] \t path to shader program [Not supported yet.]\n"
+                    " -f, --fullscreen \truns the program in (fake) fullscreen mode.\n"
+                    " -?, --help \t\tshows this help.\n"
+                    " -w, --width [value] \tsets the window width to [value].\n"
+                    " -h, --height [value] \tsets the window height to [value].\n"
+                    " -s, --source [path] \tpath to shader program\n"
                     );
             return 0;
         }
