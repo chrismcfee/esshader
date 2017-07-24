@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <X11/Xlib.h>
@@ -66,6 +67,14 @@ static void die(const char *format, ...){
     exit(EXIT_FAILURE);
 }
 
+static void info(const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    vfprintf(stdout, format, args);
+    va_end(args);
+}
+
 static double timespec_diff(const struct timespec *start, const struct timespec *stop){
     struct timespec d;
     if ((stop->tv_nsec - start->tv_nsec) < 0){
@@ -113,16 +122,18 @@ static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources
     return shader;
 }
 
+
 static void resize_viewport(GLsizei w, GLsizei h){
     if (viewport_width != w || viewport_height != h) {
         glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
         glViewport(0, 0, w, h);
         viewport_width = w;
         viewport_height = h;
+        info("Setting window size to (%d,%d).\n", w, h);
     }
 }
 
-static void startup(void)
+static void startup(int width, int height, bool fullscreen)
 {
     static const EGLint cv[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
@@ -175,9 +186,22 @@ static void startup(void)
         KeyPressMask | PointerMotionMask;
     swa.override_redirect = False;
 
+    int window_width = width;
+    int window_height = height;
+    
+    if(fullscreen) {
+        window_width = DisplayWidth(x_display, screen);
+        window_height = DisplayHeight(x_display, screen);
+        //Setting swa.override_redirect to True would result a "real" fullscreen window
+        //BUT: On multiscreen systems it would stretch over all displays 
+        //AND: Keyboard commands aren't processed anymore
+        //MAYBE: Switch to glfw or something similar to create the window. As a neat side effect the app would run on Windows too.
+        //swa.override_redirect = True;
+    }
+
     x_window = XCreateWindow(x_display, x_root, 0, 0,
-            DisplayWidth(x_display, screen),
-            DisplayHeight(x_display, screen),
+            window_width,
+            window_height,
             0, vi->depth, InputOutput, vi->visual,
             CWBackPixel | CWColormap | CWEventMask |
             CWOverrideRedirect, &swa);
@@ -307,10 +331,96 @@ static void render(float abstime){
     eglSwapBuffers(egl_display, egl_surface);
 }
 
-int main(int argc, char **argv){
-    struct timespec start, cur;
+//Reads a file into a string
+//Return string or NULL on failure
+static char* read_file_into_str(const char *filename) {
+    long length = 0;
+    char *result = NULL;
+    FILE *file = fopen(filename, "r");
+    if(file) {
+        int status = fseek(file, 0, SEEK_END);
+        if(status != 0) {
+            fclose(file);
+            return NULL;
+        }
+        length = ftell(file);
+        status = fseek(file, 0, SEEK_SET);
+        if(status != 0) {
+            fclose(file);
+            return NULL;
+        }
+        result = malloc((length+1) * sizeof(char));
+        if(result) {
+            size_t actual_length = fread(result, sizeof(char), length , file);
+            result[actual_length++] = '\0';
+        } 
+        fclose(file);
+        return result;
+    }
+    return NULL;
+}
 
-    startup();
+int main(int argc, char **argv){
+    info("ESShader -  Version: %s\n", VERSION);
+
+    struct timespec start, cur;
+    
+    //Default selected_options
+    bool fullscreen = false;
+    int window_width = 640;
+    int window_height = 360;
+
+    int temp_width = 0;
+    int temp_height = 0;
+
+    //shader program
+    char *program_source = NULL;
+
+    //Parse command line selected_options
+    int selected_option = -1;
+    int selected_index = 0;
+    while((selected_option = getopt_long (argc, argv, options_string, long_options, &selected_index)) != -1) {
+    switch(selected_option) {
+        case 'f':
+            fullscreen = true;
+            break;
+        case 'w':
+            temp_width = atoi(optarg);
+            if(temp_width > 0) {
+                window_width = temp_width;
+            }
+            break;
+        case 'h':
+            temp_height = atoi(optarg);
+            if(temp_height > 0) {
+                window_height = temp_height;
+            }
+            break;
+        case 's':
+            info("Loading shader program: %s\n", optarg);
+            program_source = read_file_into_str(optarg);
+            if(program_source == NULL) {
+                die("Could not read shader program %s\n", optarg);
+            }
+            default_fragment_shader = program_source;
+            break;
+        case '?':
+            info(   "\nUsage: esshader [OPTIONS]\n"
+                    "Example: esshader --width 1280 --height 720\n\n"
+                    "Options:\n"
+                    " -f, --fullscreen \truns the program in (fake) fullscreen mode.\n"
+                    " -?, --help \t\tshows this help.\n"
+                    " -w, --width [value] \tsets the window width to [value].\n"
+                    " -h, --height [value] \tsets the window height to [value].\n"
+                    " -s, --source [path] \tpath to shader program\n"
+                    );
+            return 0;
+        }
+    }
+
+    info("Press [ESC] or [q] to exit.\n");
+    info("Run with --help flag for more information.\n\n");
+    startup(window_width, window_height, fullscreen);
     monotonic_time(&start);
 
     for (;;) {
@@ -322,6 +432,10 @@ int main(int argc, char **argv){
     }
 
     shutdown();
+    if(program_source != NULL) {
+        free(program_source);
+        program_source = NULL;
+    }
     return 0;
 }
 
