@@ -37,8 +37,6 @@ static const char fragment_shader_footer[] =
     "\nvoid main(){mainImage(gl_FragColor,gl_FragCoord.xy);}";
 
 static GLFWwindow *window;
-static GLsizei viewport_width = -1;
-static GLsizei viewport_height = -1;
 static GLuint shader_program;
 static GLint attrib_position;
 static GLint sampler_channel[4];
@@ -116,14 +114,15 @@ static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources
 }
 
 
-static void resize_viewport(GLsizei w, GLsizei h){
-    if (viewport_width != w || viewport_height != h) {
-        glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
-        glViewport(0, 0, w, h);
-        viewport_width = w;
-        viewport_height = h;
-        info("Setting window size to (%d,%d).\n", w, h);
-    }
+static void resize_viewport(GLFWwindow* window, int w, int h){
+    glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
+    glViewport(0, 0, w, h);
+    info("Setting window size to (%d,%d).\n", w, h);
+}
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS && (key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE))
+        glfwSetWindowShouldClose(window, 1);
 }
 
 static void startup(int width, int height, bool fullscreen)
@@ -146,6 +145,8 @@ static void startup(int width, int height, bool fullscreen)
     }
 
     glfwMakeContextCurrent(window);
+    glfwSetKeyCallback(window, &key_callback);
+    glfwSetFramebufferSizeCallback(window, &resize_viewport);
 
     sources[0] = common_shader_header;
     sources[1] = vertex_shader_body;
@@ -194,45 +195,11 @@ static void startup(int width, int height, bool fullscreen)
     uniform_res = glGetUniformLocation(shader_program, "iResolution");
     uniform_srate = glGetUniformLocation(shader_program, "iSampleRate");
 
-    resize_viewport(width, height);
+    resize_viewport(window, width, height);
 }
 
 static void shutdown(void){
     glfwTerminate();
-}
-
-static bool process_event(XEvent *ev){
-    char kbuf[32];
-    KeySym key;
-
-    switch (ev->type) {
-        case ConfigureNotify:
-            resize_viewport(ev->xconfigure.width, ev->xconfigure.height);
-            break;
-        case KeyPress:
-            XLookupString(&ev->xkey, kbuf, sizeof(kbuf), &key, &x_kstatus);
-            if (key == XK_Escape || key == XK_q)
-                return false;
-            break;
-        default:
-            break;
-    }
-
-    return true;
-}
-
-static bool process_events(void){
-    bool done = false;
-    XEvent ev;
-
-    while (XPending(x_display)) {
-        XNextEvent(x_display, &ev);
-        if (!process_event(&ev)) {
-            done = true;
-        }
-    }
-
-    return !done;
 }
 
 static void render(float abstime){
@@ -345,12 +312,11 @@ int main(int argc, char **argv){
     startup(window_width, window_height, fullscreen);
     monotonic_time(&start);
 
-    for (;;) {
-        if (!process_events()) {
-            break;
-        }
+    while (!glfwWindowShouldClose(window)) {
         render((float)timespec_diff(&start, &cur));
         monotonic_time(&cur);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
     shutdown();
