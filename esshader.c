@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
-#include <unistd.h>
 
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
@@ -64,25 +62,6 @@ static void info(const char *format, ...) {
     va_start(args, format);
     vfprintf(stdout, format, args);
     va_end(args);
-}
-
-static double timespec_diff(const struct timespec *start, const struct timespec *stop){
-    struct timespec d;
-    if ((stop->tv_nsec - start->tv_nsec) < 0){
-        d.tv_sec = stop->tv_sec - start->tv_sec - 1;
-        d.tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000l;
-    }
-    else {
-        d.tv_sec = stop->tv_sec - start->tv_sec;
-        d.tv_nsec = stop->tv_nsec - start->tv_nsec;
-    }
-
-    return (double)d.tv_sec + (double)d.tv_nsec / 1000000000.0;
-}
-
-static void monotonic_time(struct timespec *tp){
-    if (clock_gettime(CLOCK_MONOTONIC, tp) == -1)
-        die("clock_gettime on CLOCK_MONOTIC failed.\n");
 }
 
 static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources){
@@ -252,8 +231,6 @@ static char* read_file_into_str(const char *filename) {
 int main(int argc, char **argv){
     info("ESShader -  Version: %s\n", VERSION);
 
-    struct timespec start, cur;
-    
     //Default selected_options
     bool fullscreen = false;
     int window_width = 640;
@@ -310,11 +287,10 @@ int main(int argc, char **argv){
     info("Press [ESC] or [q] to exit.\n");
     info("Run with --help flag for more information.\n\n");
     startup(window_width, window_height, fullscreen);
-    monotonic_time(&start);
+    glfwSetTime(0.0);
 
     while (!glfwWindowShouldClose(window)) {
-        render((float)timespec_diff(&start, &cur));
-        monotonic_time(&cur);
+        render((float)glfwGetTime());
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
