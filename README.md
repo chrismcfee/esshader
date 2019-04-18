@@ -1,12 +1,11 @@
-esshader - ShaderToy viewer for X & GLES2
+esshader - offline ShaderToy viewer
 ===========================================
-Simple offline ShaderToy compatible GLSL shader viewer for
-X using OpenGL ES 2.0, inspired by the Suckless Philosophy.
+Simple offline ShaderToy-compatible GLSL shader viewer.
 
 
 Requirements:
 -------------
-In order to build esshader you will need the Xlib, EGL and
+In order to build esshader you will need the GLFW and
 OpenGL ES 2.0 development headers installed on your system.
 The program can also be demanding on GPU hardware, so the
 more powerful GPU you have, the better.
