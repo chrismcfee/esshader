@@ -6,10 +6,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
-#include <GLES2/gl2.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
 
 #include "config.h"
 
@@ -132,6 +131,7 @@ static void startup(int width, int height, bool fullscreen)
     GLuint vtx, frag;
     const char *sources[4];
     char* log;
+    GLint success, len;
 
     if (!glfwInit())
         die("Unable to initialize GLFW.\n");
@@ -140,8 +140,10 @@ static void startup(int width, int height, bool fullscreen)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    if (!(window = glfwCreateWindow(width, height, "esshader", NULL, NULL)))
+    if (!(window = glfwCreateWindow(width, height, "esshader", NULL, NULL))) {
+        glfwTerminate();
         die("Unable to create GLFW window.\n");
+    }
 
     glfwMakeContextCurrent(window);
 
@@ -249,7 +251,6 @@ static void render(float abstime){
     glEnableVertexAttribArray(attrib_position);
     glVertexAttribPointer(attrib_position, 2, GL_FLOAT, GL_FALSE, 0, vertices);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    eglSwapBuffers(egl_display, egl_surface);
 }
 
 //Reads a file into a string
