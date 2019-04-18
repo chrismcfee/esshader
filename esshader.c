@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <EGL/egl.h>
+#include <GLFW/glfw3.h>
 #include <GLES2/gl2.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -37,13 +37,7 @@ static const char fragment_shader_header[] =
 static const char fragment_shader_footer[] =
     "\nvoid main(){mainImage(gl_FragColor,gl_FragCoord.xy);}";
 
-static Display *x_display;
-static Window x_root;
-static Window x_window;
-static XComposeStatus x_kstatus;
-static EGLDisplay egl_display;
-static EGLContext egl_context;
-static EGLSurface egl_surface;
+static GLFWwindow *window;
 static GLsizei viewport_width = -1;
 static GLsizei viewport_height = -1;
 static GLuint shader_program;
@@ -135,86 +129,21 @@ static void resize_viewport(GLsizei w, GLsizei h){
 
 static void startup(int width, int height, bool fullscreen)
 {
-    static const EGLint cv[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE
-    };
-
-    int screen, nvi;
-    XWindowAttributes gwa;
-    XSetWindowAttributes swa;
-    XVisualInfo *vi, vit;
-    EGLint vid, ncfg, len, success;
-    EGLConfig cfg;
     GLuint vtx, frag;
     const char *sources[4];
     char* log;
 
-    if (!(x_display = XOpenDisplay(NULL)))
-        die("Unable to open X display.\n");
+    if (!glfwInit())
+        die("Unable to initialize GLFW.\n");
 
-    if ((egl_display = eglGetDisplay(x_display)) == EGL_NO_DISPLAY)
-        die("Unable to get EGL display.\n");
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    if (!eglBindAPI(EGL_OPENGL_ES_API))
-        die("Unable to bind OpenGL ES API to EGL.\n");
+    if (!(window = glfwCreateWindow(width, height, "esshader", NULL, NULL)))
+        die("Unable to create GLFW window.\n");
 
-    if (!eglInitialize(egl_display, NULL, NULL))
-        die("Unable to initialize EGL.\n");
-
-    if (!eglChooseConfig(egl_display, egl_config, &cfg, 1, &ncfg))
-        die("Unable to find EGL framebuffer configuration.\n");
-
-    egl_context = eglCreateContext(egl_display, cfg, EGL_NO_CONTEXT, cv);
-    if (egl_context == EGL_NO_CONTEXT)
-        die("Unable to create EGL context.\n");
-
-    if (!eglGetConfigAttrib(egl_display, cfg, EGL_NATIVE_VISUAL_ID, &vid))
-        die("Unable to get X VisualID.\n");
-
-    screen = DefaultScreen(x_display);
-    x_root = RootWindow(x_display, screen);
-
-    vit.visualid = vid;
-    if (!(vi = XGetVisualInfo(x_display, VisualIDMask, &vit, &nvi)))
-        die("Unable to find matching XVisualInfo for framebuffer.\n");
-
-    swa.background_pixel = 0;
-    swa.colormap = XCreateColormap(x_display, x_root, vi->visual, AllocNone);
-    swa.event_mask =
-        ExposureMask | StructureNotifyMask |
-        KeyPressMask | PointerMotionMask;
-    swa.override_redirect = False;
-
-    int window_width = width;
-    int window_height = height;
-    
-    if(fullscreen) {
-        window_width = DisplayWidth(x_display, screen);
-        window_height = DisplayHeight(x_display, screen);
-        //Setting swa.override_redirect to True would result a "real" fullscreen window
-        //BUT: On multiscreen systems it would stretch over all displays 
-        //AND: Keyboard commands aren't processed anymore
-        //MAYBE: Switch to glfw or something similar to create the window. As a neat side effect the app would run on Windows too.
-        //swa.override_redirect = True;
-    }
-
-    x_window = XCreateWindow(x_display, x_root, 0, 0,
-            window_width,
-            window_height,
-            0, vi->depth, InputOutput, vi->visual,
-            CWBackPixel | CWColormap | CWEventMask |
-            CWOverrideRedirect, &swa);
-
-    XStoreName(x_display, x_window, "esshader");
-    XMapWindow(x_display, x_window);
-    XFlush(x_display);
-
-    egl_surface = eglCreateWindowSurface(egl_display, cfg, x_window, NULL);
-    if (egl_surface == EGL_NO_SURFACE)
-        die("Unable to create EGL window surface.\n");
-
-    eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+    glfwMakeContextCurrent(window);
 
     sources[0] = common_shader_header;
     sources[1] = vertex_shader_body;
@@ -263,19 +192,11 @@ static void startup(int width, int height, bool fullscreen)
     uniform_res = glGetUniformLocation(shader_program, "iResolution");
     uniform_srate = glGetUniformLocation(shader_program, "iSampleRate");
 
-    if (!XGetWindowAttributes(x_display, x_window, &gwa))
-        die("Unable to get window size.\n");
-
-    resize_viewport(gwa.width, gwa.height);
+    resize_viewport(width, height);
 }
 
 static void shutdown(void){
-    glDeleteProgram(shader_program);
-    eglDestroyContext(egl_display, egl_context);
-    eglDestroySurface(egl_display, egl_surface);
-    eglTerminate(egl_display);
-    XDestroyWindow(x_display, x_window);
-    XCloseDisplay(x_display);
+    glfwTerminate();
 }
 
 static bool process_event(XEvent *ev){
