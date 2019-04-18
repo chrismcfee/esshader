@@ -118,7 +118,15 @@ static void startup(int width, int height, bool fullscreen)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    if (!(window = glfwCreateWindow(width, height, "esshader", NULL, NULL))) {
+    GLFWmonitor *monitor = NULL;
+    if (fullscreen) {
+        monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+        width = mode->width;
+        height = mode->height;
+    }
+
+    if (!(window = glfwCreateWindow(width, height, "esshader", monitor, NULL))) {
         glfwTerminate();
         die("Unable to create GLFW window.\n");
     }
@@ -274,7 +282,7 @@ int main(int argc, char **argv){
             info(   "\nUsage: esshader [OPTIONS]\n"
                     "Example: esshader --width 1280 --height 720\n\n"
                     "Options:\n"
-                    " -f, --fullscreen \truns the program in (fake) fullscreen mode.\n"
+                    " -f, --fullscreen \truns the program in fullscreen mode.\n"
                     " -?, --help \t\tshows this help.\n"
                     " -w, --width [value] \tsets the window width to [value].\n"
                     " -h, --height [value] \tsets the window height to [value].\n"
