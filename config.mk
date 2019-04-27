@@ -5,16 +5,15 @@ VERSION = 0.1
 
 # file paths
 PREFIX = /usr/local
-X11INC = /usr/X11R6/include
-X11LIB = /usr/X11R6/lib
 
 # includes and libs
-INCS = -I. -I/usr/include -I${X11INC}
-LIBS = -L/usr/lib -lc -lm -L${X11LIB} -lX11 -lEGL -lGLESv2
+INCS = -I.
+LIBS = -lc -lm -lGLESv2 $(shell pkg-config --libs glfw3)
 
 # toolchain flags
-CPPFLAGS = -DVERSION=\"${VERSION}\" -D_POSIX_C_SOURCE=200112L
-CFLAGS = -std=c99 -pedantic -Wall -O3 ${INCS} ${CPPFLAGS}
+CPPFLAGS = -DVERSION=\"${VERSION}\"
+CFLAGS = -std=c99 -pedantic -Wall -O2 ${INCS} ${CPPFLAGS} \
+	$(pkg-config --cflags glfw3)
 LDFLAGS = -s ${LIBS}
 
 # compiler and linker

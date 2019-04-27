@@ -6,14 +6,6 @@
 #include <getopt.h>
 
 
-static const EGLint egl_config[] = {
-    EGL_RED_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_BLUE_SIZE, 8,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-    EGL_NONE
-};
-
 static const char options_string[] = "?fw:h:s:";
 
 static struct option long_options[] = {

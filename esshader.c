@@ -4,12 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
+
+#define GLFW_INCLUDE_ES2
+#include <GLFW/glfw3.h>
 
 #include "config.h"
 
@@ -37,15 +34,7 @@ static const char fragment_shader_header[] =
 static const char fragment_shader_footer[] =
     "\nvoid main(){mainImage(gl_FragColor,gl_FragCoord.xy);}";
 
-static Display *x_display;
-static Window x_root;
-static Window x_window;
-static XComposeStatus x_kstatus;
-static EGLDisplay egl_display;
-static EGLContext egl_context;
-static EGLSurface egl_surface;
-static GLsizei viewport_width = -1;
-static GLsizei viewport_height = -1;
+static GLFWwindow *window;
 static GLuint shader_program;
 static GLint attrib_position;
 static GLint sampler_channel[4];
@@ -73,25 +62,6 @@ static void info(const char *format, ...) {
     va_start(args, format);
     vfprintf(stdout, format, args);
     va_end(args);
-}
-
-static double timespec_diff(const struct timespec *start, const struct timespec *stop){
-    struct timespec d;
-    if ((stop->tv_nsec - start->tv_nsec) < 0){
-        d.tv_sec = stop->tv_sec - start->tv_sec - 1;
-        d.tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000l;
-    }
-    else {
-        d.tv_sec = stop->tv_sec - start->tv_sec;
-        d.tv_nsec = stop->tv_nsec - start->tv_nsec;
-    }
-
-    return (double)d.tv_sec + (double)d.tv_nsec / 1000000000.0;
-}
-
-static void monotonic_time(struct timespec *tp){
-    if (clock_gettime(CLOCK_MONOTONIC, tp) == -1)
-        die("clock_gettime on CLOCK_MONOTIC failed.\n");
 }
 
 static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources){
@@ -123,98 +93,47 @@ static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources
 }
 
 
-static void resize_viewport(GLsizei w, GLsizei h){
-    if (viewport_width != w || viewport_height != h) {
-        glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
-        glViewport(0, 0, w, h);
-        viewport_width = w;
-        viewport_height = h;
-        info("Setting window size to (%d,%d).\n", w, h);
-    }
+static void resize_viewport(GLFWwindow* window, int w, int h){
+    glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
+    glViewport(0, 0, w, h);
+    info("Setting window size to (%d,%d).\n", w, h);
+}
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS && (key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE))
+        glfwSetWindowShouldClose(window, 1);
 }
 
 static void startup(int width, int height, bool fullscreen)
 {
-    static const EGLint cv[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE
-    };
-
-    int screen, nvi;
-    XWindowAttributes gwa;
-    XSetWindowAttributes swa;
-    XVisualInfo *vi, vit;
-    EGLint vid, ncfg, len, success;
-    EGLConfig cfg;
     GLuint vtx, frag;
     const char *sources[4];
     char* log;
+    GLint success, len;
 
-    if (!(x_display = XOpenDisplay(NULL)))
-        die("Unable to open X display.\n");
+    if (!glfwInit())
+        die("Unable to initialize GLFW.\n");
 
-    if ((egl_display = eglGetDisplay(x_display)) == EGL_NO_DISPLAY)
-        die("Unable to get EGL display.\n");
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    if (!eglBindAPI(EGL_OPENGL_ES_API))
-        die("Unable to bind OpenGL ES API to EGL.\n");
-
-    if (!eglInitialize(egl_display, NULL, NULL))
-        die("Unable to initialize EGL.\n");
-
-    if (!eglChooseConfig(egl_display, egl_config, &cfg, 1, &ncfg))
-        die("Unable to find EGL framebuffer configuration.\n");
-
-    egl_context = eglCreateContext(egl_display, cfg, EGL_NO_CONTEXT, cv);
-    if (egl_context == EGL_NO_CONTEXT)
-        die("Unable to create EGL context.\n");
-
-    if (!eglGetConfigAttrib(egl_display, cfg, EGL_NATIVE_VISUAL_ID, &vid))
-        die("Unable to get X VisualID.\n");
-
-    screen = DefaultScreen(x_display);
-    x_root = RootWindow(x_display, screen);
-
-    vit.visualid = vid;
-    if (!(vi = XGetVisualInfo(x_display, VisualIDMask, &vit, &nvi)))
-        die("Unable to find matching XVisualInfo for framebuffer.\n");
-
-    swa.background_pixel = 0;
-    swa.colormap = XCreateColormap(x_display, x_root, vi->visual, AllocNone);
-    swa.event_mask =
-        ExposureMask | StructureNotifyMask |
-        KeyPressMask | PointerMotionMask;
-    swa.override_redirect = False;
-
-    int window_width = width;
-    int window_height = height;
-    
-    if(fullscreen) {
-        window_width = DisplayWidth(x_display, screen);
-        window_height = DisplayHeight(x_display, screen);
-        //Setting swa.override_redirect to True would result a "real" fullscreen window
-        //BUT: On multiscreen systems it would stretch over all displays 
-        //AND: Keyboard commands aren't processed anymore
-        //MAYBE: Switch to glfw or something similar to create the window. As a neat side effect the app would run on Windows too.
-        //swa.override_redirect = True;
+    GLFWmonitor *monitor = NULL;
+    if (fullscreen) {
+        monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+        width = mode->width;
+        height = mode->height;
     }
 
-    x_window = XCreateWindow(x_display, x_root, 0, 0,
-            window_width,
-            window_height,
-            0, vi->depth, InputOutput, vi->visual,
-            CWBackPixel | CWColormap | CWEventMask |
-            CWOverrideRedirect, &swa);
+    if (!(window = glfwCreateWindow(width, height, "esshader", monitor, NULL))) {
+        glfwTerminate();
+        die("Unable to create GLFW window.\n");
+    }
 
-    XStoreName(x_display, x_window, "esshader");
-    XMapWindow(x_display, x_window);
-    XFlush(x_display);
-
-    egl_surface = eglCreateWindowSurface(egl_display, cfg, x_window, NULL);
-    if (egl_surface == EGL_NO_SURFACE)
-        die("Unable to create EGL window surface.\n");
-
-    eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+    glfwMakeContextCurrent(window);
+    glfwSetKeyCallback(window, &key_callback);
+    glfwSetFramebufferSizeCallback(window, &resize_viewport);
 
     sources[0] = common_shader_header;
     sources[1] = vertex_shader_body;
@@ -263,53 +182,11 @@ static void startup(int width, int height, bool fullscreen)
     uniform_res = glGetUniformLocation(shader_program, "iResolution");
     uniform_srate = glGetUniformLocation(shader_program, "iSampleRate");
 
-    if (!XGetWindowAttributes(x_display, x_window, &gwa))
-        die("Unable to get window size.\n");
-
-    resize_viewport(gwa.width, gwa.height);
+    resize_viewport(window, width, height);
 }
 
 static void shutdown(void){
-    glDeleteProgram(shader_program);
-    eglDestroyContext(egl_display, egl_context);
-    eglDestroySurface(egl_display, egl_surface);
-    eglTerminate(egl_display);
-    XDestroyWindow(x_display, x_window);
-    XCloseDisplay(x_display);
-}
-
-static bool process_event(XEvent *ev){
-    char kbuf[32];
-    KeySym key;
-
-    switch (ev->type) {
-        case ConfigureNotify:
-            resize_viewport(ev->xconfigure.width, ev->xconfigure.height);
-            break;
-        case KeyPress:
-            XLookupString(&ev->xkey, kbuf, sizeof(kbuf), &key, &x_kstatus);
-            if (key == XK_Escape || key == XK_q)
-                return false;
-            break;
-        default:
-            break;
-    }
-
-    return true;
-}
-
-static bool process_events(void){
-    bool done = false;
-    XEvent ev;
-
-    while (XPending(x_display)) {
-        XNextEvent(x_display, &ev);
-        if (!process_event(&ev)) {
-            done = true;
-        }
-    }
-
-    return !done;
+    glfwTerminate();
 }
 
 static void render(float abstime){
@@ -328,7 +205,6 @@ static void render(float abstime){
     glEnableVertexAttribArray(attrib_position);
     glVertexAttribPointer(attrib_position, 2, GL_FLOAT, GL_FALSE, 0, vertices);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    eglSwapBuffers(egl_display, egl_surface);
 }
 
 //Reads a file into a string
@@ -363,8 +239,6 @@ static char* read_file_into_str(const char *filename) {
 int main(int argc, char **argv){
     info("ESShader -  Version: %s\n", VERSION);
 
-    struct timespec start, cur;
-    
     //Default selected_options
     bool fullscreen = false;
     int window_width = 640;
@@ -408,7 +282,7 @@ int main(int argc, char **argv){
             info(   "\nUsage: esshader [OPTIONS]\n"
                     "Example: esshader --width 1280 --height 720\n\n"
                     "Options:\n"
-                    " -f, --fullscreen \truns the program in (fake) fullscreen mode.\n"
+                    " -f, --fullscreen \truns the program in fullscreen mode.\n"
                     " -?, --help \t\tshows this help.\n"
                     " -w, --width [value] \tsets the window width to [value].\n"
                     " -h, --height [value] \tsets the window height to [value].\n"
@@ -421,14 +295,12 @@ int main(int argc, char **argv){
     info("Press [ESC] or [q] to exit.\n");
     info("Run with --help flag for more information.\n\n");
     startup(window_width, window_height, fullscreen);
-    monotonic_time(&start);
+    glfwSetTime(0.0);
 
-    for (;;) {
-        if (!process_events()) {
-            break;
-        }
-        render((float)timespec_diff(&start, &cur));
-        monotonic_time(&cur);
+    while (!glfwWindowShouldClose(window)) {
+        render((float)glfwGetTime());
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
     shutdown();
