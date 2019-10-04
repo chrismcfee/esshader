@@ -115,6 +115,7 @@ static GLuint compile_shader(GLenum type, GLsizei nsources, const char **sources
 static void resize_viewport(GLFWwindow* window, int w, int h){
     glUniform3f(uniform_res, (float)w, (float)h, 0.0f);
     glViewport(0, 0, w, h);
+    info("Setting window size to (%d,%d).\n", w, h);
     viewportSizeX = w;
     viewportSizeY = h;
 }
