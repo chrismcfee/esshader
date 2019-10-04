@@ -123,8 +123,6 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE) {
             glfwSetWindowShouldClose(window, 1);
-        } else if (key == GLFW_KEY_F5) {
-
         } else if (key == GLFW_KEY_F) {
             if (maximized) {
                 glfwRestoreWindow(window);
