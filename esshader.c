@@ -153,7 +153,9 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
     } else if (button == 1) {
         mouseRPressed = action;
     }
-    glUniform4f(uniform_mouse, mouseX, mouseY, mouseLPressed, mouseRPressed);
+    if (mouseUpdating) {
+        glUniform4f(uniform_mouse, mouseX, mouseY, mouseLPressed, mouseRPressed);
+    }
 }
 
 static void startup(int width, int height, int window_x, int window_y, bool fullscreen)
