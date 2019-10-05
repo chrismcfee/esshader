@@ -6,7 +6,7 @@
 #include <getopt.h>
 
 
-static const char options_string[] = "?fw:h:s:l0:1:2:3:x:y:";
+static const char options_string[] = "?fw:h:s:l0:1:2:3:x:y:k:";
 
 static struct option long_options[] = {
     {"width", required_argument, 0, 'w'},
@@ -21,6 +21,7 @@ static struct option long_options[] = {
     {"texture1", required_argument, 0, '1'},
     {"texture2", required_argument, 0, '2'},
     {"texture3", required_argument, 0, '3'},
+    {"keyboard", required_argument, 0, 'k'},
     {"help", no_argument, 0, '?'},
     {0, 0, 0, 0}
 };

@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define GLFW_INCLUDE_ES2
+#define GLFW_INCLUDE_ES3
 #include <GLFW/glfw3.h>
 
 #include <SOIL/SOIL.h>
@@ -41,8 +41,17 @@ static GLfloat mouseX = 0.0;
 static GLfloat mouseY = 0.0;
 static GLfloat mouseLPressed = 0.0;
 static GLfloat mouseRPressed = 0.0;
+
 static int mouseUpdating = 0;
 static int maximized = 0;
+
+// what iChannel to bind the virtual keyboard to (argument -k)
+static int bindKeyboard = -1;
+// for storing the keyboard state in a ST-style texture
+static unsigned char keyStateTextureData[256 * 3];
+static GLuint keyStateTextureID;
+// for translating to JS key codes
+static int keyLookup[GLFW_KEY_LAST + 1];
 
 static void die(const char *format, ...){
     va_list args;
@@ -120,8 +129,102 @@ static void resize_viewport(GLFWwindow* window, int w, int h){
     viewportSizeY = h;
 }
 
+
+static void populate_key_lookup() {
+    // Convert GLFW key codes to Shadertoy / JS
+    for (int i = 0; i <= GLFW_KEY_LAST; ++i) {
+        keyLookup[i] = -1;
+    }
+    for (int i = GLFW_KEY_0; i <= GLFW_KEY_9; ++i) {
+        keyLookup[i] = i;
+    }
+    for (int i = GLFW_KEY_A; i <= GLFW_KEY_Z; ++i) {
+        keyLookup[i] = i;
+    }
+    for (int i = GLFW_KEY_F1; i <= GLFW_KEY_F12; ++i) {
+        keyLookup[i] = 112 + i - GLFW_KEY_F1;
+    }
+    for (int i = GLFW_KEY_KP_0; i <= GLFW_KEY_KP_9; ++i) {
+        keyLookup[i] = 96 + i - GLFW_KEY_KP_0;
+    }
+    keyLookup[GLFW_KEY_SPACE]         = 32;
+    keyLookup[GLFW_KEY_APOSTROPHE]    = 222;
+    keyLookup[GLFW_KEY_COMMA]         = 188;
+    keyLookup[GLFW_KEY_MINUS]         = 173;
+    keyLookup[GLFW_KEY_PERIOD]        = 190;
+    keyLookup[GLFW_KEY_SLASH]         = 191;
+    keyLookup[GLFW_KEY_SEMICOLON]     = 59;
+    keyLookup[GLFW_KEY_EQUAL]         = 61;
+    keyLookup[GLFW_KEY_LEFT_BRACKET]  = 219;
+    keyLookup[GLFW_KEY_BACKSLASH]     = 220;
+    keyLookup[GLFW_KEY_RIGHT_BRACKET] = 221;
+    keyLookup[GLFW_KEY_GRAVE_ACCENT]  = 192;
+    keyLookup[GLFW_KEY_ESCAPE]        = 27;
+    keyLookup[GLFW_KEY_ENTER]         = 13;
+    keyLookup[GLFW_KEY_TAB]           = 9;
+    keyLookup[GLFW_KEY_BACKSPACE]     = 8;
+    keyLookup[GLFW_KEY_INSERT]        = 45;
+    keyLookup[GLFW_KEY_DELETE]        = 46;
+    keyLookup[GLFW_KEY_RIGHT]         = 39;
+    keyLookup[GLFW_KEY_LEFT]          = 37;
+    keyLookup[GLFW_KEY_DOWN]          = 40;
+    keyLookup[GLFW_KEY_UP]            = 38;
+    keyLookup[GLFW_KEY_PAGE_UP]       = 33;
+    keyLookup[GLFW_KEY_PAGE_DOWN]     = 34;
+    keyLookup[GLFW_KEY_HOME]          = 36;
+    keyLookup[GLFW_KEY_END]           = 35;
+    keyLookup[GLFW_KEY_CAPS_LOCK]     = 20;
+    keyLookup[GLFW_KEY_SCROLL_LOCK]   = 145;
+    keyLookup[GLFW_KEY_NUM_LOCK]      = 144;
+    keyLookup[GLFW_KEY_PRINT_SCREEN]  = 42;
+    keyLookup[GLFW_KEY_PAUSE]         = 19;
+    keyLookup[GLFW_KEY_KP_DECIMAL]    = 110;
+    keyLookup[GLFW_KEY_KP_DIVIDE]     = 111;
+    keyLookup[GLFW_KEY_KP_MULTIPLY]   = 106;
+    keyLookup[GLFW_KEY_KP_SUBTRACT]   = 109;
+    keyLookup[GLFW_KEY_KP_ADD]        = 107;
+    keyLookup[GLFW_KEY_KP_ENTER]      = 13;
+    keyLookup[GLFW_KEY_LEFT_SHIFT]    = 16;
+    keyLookup[GLFW_KEY_LEFT_CONTROL]  = 17;
+    keyLookup[GLFW_KEY_LEFT_ALT]      = 18;
+    keyLookup[GLFW_KEY_LEFT_SUPER]    = 91;
+    keyLookup[GLFW_KEY_RIGHT_SHIFT]   = 16;
+    keyLookup[GLFW_KEY_RIGHT_CONTROL] = 17;
+    keyLookup[GLFW_KEY_RIGHT_ALT]     = 225;
+    keyLookup[GLFW_KEY_RIGHT_SUPER]   = 91;
+    keyLookup[GLFW_KEY_MENU]          = 93;
+}
+
+static void update_keystate() {
+    if (bindKeyboard >= 0) {
+        glActiveTexture(GL_TEXTURE0 + bindKeyboard);
+        glBindTexture(GL_TEXTURE_2D, keyStateTextureID);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 256, 3, 0, GL_RED, GL_UNSIGNED_BYTE, keyStateTextureData);
+        glUniform1i(sampler_channel[bindKeyboard], bindKeyboard);
+    }
+}
+
+static void reset_keystate() {
+    memset(keyStateTextureData, 0, sizeof(keyStateTextureData));
+}
+
+static void partially_reset_keystate() {
+    // Reset 'just pressed' (= rising edge key event) flags
+    for (int i=0; i<256; ++i) {
+        keyStateTextureData[i + 256] = 0;
+    }
+}
+
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
+        int js = keyLookup[key];
+        if (js >= 0) {
+            keyStateTextureData[js + 0] = 255;
+            keyStateTextureData[js + 256] = 255;
+            keyStateTextureData[js + 512] = keyStateTextureData[js + 512] ^ 0xff;
+        }
         if (key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE) {
             glfwSetWindowShouldClose(window, 1);
         } else if (key == GLFW_KEY_F) {
@@ -132,6 +235,12 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                 glfwMaximizeWindow(window);
                 maximized = 1;
             }
+        }
+    } else if (action == GLFW_RELEASE) {
+        int js = keyLookup[key];
+        if (js >= 0) {
+            keyStateTextureData[js + 0] = 0;
+            keyStateTextureData[js + 256] = 0;
         }
     }
 }
@@ -190,7 +299,6 @@ static void startup(int width, int height, int window_x, int window_y, bool full
     }
 
     glfwMakeContextCurrent(window);
-    //glfwSetWindowMaximizeCallback(window, &window_maximize_callback);
     glfwSetCursorPosCallback(window, &cursor_position_callback);
     glfwSetMouseButtonCallback(window, &mouse_button_callback);
     glfwSetKeyCallback(window, &key_callback);
@@ -263,10 +371,8 @@ static void load_images_and_bind(const char* filenames[]) {
                 if (!tex_2d) {
                     die("SOIL image library error: %s\n", SOIL_last_result());
                 }
-                info(" created as texture %d\n", tex_2d);
                 glActiveTexture(GL_TEXTURE0 + i);
                 glBindTexture(GL_TEXTURE_2D, tex_2d);
-                info(" bind to uniform %d\n", sampler_channel[i]);
                 glUniform1i(sampler_channel[i], i);
             }
         }
@@ -381,6 +487,12 @@ int main(int argc, char **argv){
                 window_y = temp_val;
             }
             break;
+        case 'k':
+            temp_val = atoi(optarg);
+            if(temp_val >= 0 && temp_val < 4) {
+                bindKeyboard = temp_val;
+            }
+            break;
         case 's':
             info("Loading shader program: %s\n", optarg);
             program_source = read_file_into_str(optarg);
@@ -414,25 +526,39 @@ int main(int argc, char **argv){
                     " -1, --texture1 <path> \tload texture for iChannel1\n"
                     " -2, --texture2 <path> \tload texture for iChannel2\n"
                     " -3, --texture3 <path> \tload texture for iChannel3\n"
+                    " -k, --keyboard <ch> \tbind keyboard to iChannel<ch>\n"
                     );
             return 0;
         }
     }
 
+    if (bindKeyboard >= 0) {
+        if (texture_files[bindKeyboard] != NULL) {
+            die("Error: cannot bind texture and keyboard to the same channel.\n");
+        } else {
+            info("Dynamic keyboard texture will be bound to iChannel%d.\n", bindKeyboard);
+            glGenTextures(1, &keyStateTextureID);
+        }
+    }
     if (legacy) {
         select_gles2();
     } else {
         select_gles3();
     }
-    info("Press [ESC] or [q] to exit.\n");
-    info("Run with --help flag for more information.\n\n");
+    populate_key_lookup();
+    reset_keystate();
     startup(window_width, window_height, window_x, window_y, fullscreen);
     load_images_and_bind(texture_files);
-    glfwSetTime(0.0);
 
+    info("Press [ESC] or [q] to exit.\n");
+    info("Run with --help flag for more information.\n\n");
+
+    glfwSetTime(0.0);
     while (!glfwWindowShouldClose(window)) {
+        update_keystate();
         render((float)glfwGetTime());
         glfwSwapBuffers(window);
+        partially_reset_keystate();
         glfwPollEvents();
     }
 
