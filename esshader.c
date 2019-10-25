@@ -256,15 +256,14 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
+    printf("button %d action %d\n", button, action);
     if (button == 0) {
         mouseUpdating = action;
         mouseLPressed = action;
     } else if (button == 1) {
         mouseRPressed = action;
     }
-    if (mouseUpdating) {
-        glUniform4f(uniform_mouse, mouseX, mouseY, mouseLPressed, mouseRPressed);
-    }
+    glUniform4f(uniform_mouse, mouseX, mouseY, mouseLPressed, mouseRPressed);
 }
 
 static void startup(int width, int height, int window_x, int window_y, bool fullscreen)
