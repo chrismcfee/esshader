@@ -1,5 +1,5 @@
 # esshader version
-VERSION = 0.1
+VERSION = 0.2
 
 # customize below to fit your system
 
@@ -8,7 +8,7 @@ PREFIX = /usr/local
 
 # includes and libs
 INCS = -I.
-LIBS = -lc -lm -lGLESv2 $(shell pkg-config --libs glfw3)
+LIBS = -lc -lm -lGLESv2 -lSOIL $(shell pkg-config --libs glfw3)
 
 # toolchain flags
 CPPFLAGS = -DVERSION=\"${VERSION}\"
